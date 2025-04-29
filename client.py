@@ -62,10 +62,20 @@ def main():
         send_thread.join()
         receive_thread.join()
 
+    except KeyboardInterrupt:
+        print("\nExiting...")
+
     except Exception as e:
         print("\nExiting...")
         sock.close()
         exit(1)
+
+    finally:
+        if sock:
+            print("Closing client socket.")
+            sock.close()
+
+    sys.exit(0)
 
 
 if __name__ == "__main__":

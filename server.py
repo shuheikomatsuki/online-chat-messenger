@@ -1,34 +1,83 @@
 import socket
+import sys
+import threading
+import datetime
+import time
+
+def remove_client(client_list):
+    time.sleep(10)
+    while True:
+        addresses_to_remove = []
+        current_time = datetime.datetime.now()
+
+        for address in list(client_list.keys()):
+            client_info = client_list.get(address)
+
+            if client_info.get("last_send_time") is not None:
+                elapsed_seconds = (current_time - client_info["last_send_time"]).total_seconds()
+
+                if (elapsed_seconds > 20):
+                    print(f"Removing client {address} due to inactivity ({elapsed_seconds:.2f}s).")
+                    addresses_to_remove.append(address)
+        for address in addresses_to_remove:
+            client_list.pop(address, None)
+            
+        time.sleep(5)
 
 def main():
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    server_address = "0.0.0.0"
-    server_port = 9001
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        server_address = "0.0.0.0"
+        server_port = 9001
 
-    print("Starting up on {} port {}".format(server_address, server_port))
+        print("Starting up on {} port {}".format(server_address, server_port))
 
-    sock.bind((server_address, server_port))
+        sock.bind((server_address, server_port))
 
-    client_list = []
+        client_list = {}
 
-    while True:
-        data, address = sock.recvfrom(4096)
-        username_length = int.from_bytes(data[:1], "big")
-        username = data[1:username_length + 1].decode("utf-8")
-        message = data[username_length + 1:].decode("utf-8")
+        removing_thread = threading.Thread(target=remove_client, args=(client_list,), daemon=True)
+        removing_thread.start()
 
-        print(f"{username}: {message}")
+        while True:
+            data, address = sock.recvfrom(4096)
+            username_length = int.from_bytes(data[:1], "big")
+            username = data[1:username_length + 1].decode("utf-8")
+            message_content = data[username_length + 1:].decode("utf-8")
 
-        if address in client_list:
-            print(f"Already connected: {address}")
-        else:
-            client_list.append(address)
-            print(f"New connection from {address}")
+            print(f"Received from {address} (user: {username}): {message_content}")
 
-        for client in client_list:
-            if client != address:
-                sock.sendto(data, client)
-                print(f"Sent message to {client}")
+            if address in client_list:
+                client_list[address]["last_send_time"] = datetime.datetime.now()
+                client_list[address]["username"] = username
+            else:
+                client_list[address] = {
+                    "address": address,
+                    "username": username,
+                    "last_send_time": datetime.datetime.now()
+                }
+                print(f"New client connected from {address} (user: {username}). Total clients: {len(client_list)}")
+
+            for client_address in client_list:
+                if client_address != address:
+                    try:
+                        sock.sendto(data, client_address)
+                    except Exception as e:
+                        print(f"An unexpected error occurred sending to {client_address}: {e}")
+    
+    except KeyboardInterrupt:
+        print("\nServer shutting down.")
+    
+    except Exception as e:
+        print(f"\nAn error occurred: {e}")
+
+    finally:
+        if sock:
+            print("Closing server socket.")
+            sock.close()
+
+    print("Server shut down.")
+    sys.exit(0)
 
 
 if __name__ == "__main__":
