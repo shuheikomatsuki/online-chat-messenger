@@ -8,8 +8,7 @@ def protocol_header(username_length):
 def send_message(sock, server_address, server_port, username):
     while True:
         input_message = input()
-        if input_message.lower() == "exit":
-            break
+        
         message = protocol_header(len(username)) + (username + input_message).encode("utf-8")
 
         try:
