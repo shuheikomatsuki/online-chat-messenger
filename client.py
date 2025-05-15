@@ -7,11 +7,12 @@ def protocol_header(username_length):
 
 def send_message(sock, server_address, server_port, username):
     while True:
+        input_message = input()
+        if input_message.lower() == "exit":
+            break
+        message = protocol_header(len(username)) + (username + input_message).encode("utf-8")
+
         try:
-            input_message = input(f"{username}: ")
-            if input_message.lower() == "exit":
-                break
-            message = protocol_header(len(username)) + (username + input_message).encode("utf-8")
             sock.sendto(message, (server_address, server_port))
             print(f"--- Sent: {input_message}")
 
@@ -19,7 +20,7 @@ def send_message(sock, server_address, server_port, username):
             print(f"Error sending message: {e}")
             sock.close()
             exit(1)
-
+    
     sock.close()
     sys.exit(0)
 
@@ -27,11 +28,10 @@ def receive_message(sock):
     while True:
         try:
             data, _ = sock.recvfrom(4096)
-            username_length = int.from_bytes(data[:1], "big")
-            username = data[1:username_length + 1].decode("utf-8")
-            message = data[username_length + 1:].decode("utf-8")
-            print(f"{username}: {message}")
-            print(f"Received: {username}: {message}")
+            username_len = int.from_bytes(data[:1], "big")
+            username = data[1:username_len + 1].decode("utf-8")
+            message = data[username_len + 1:].decode("utf-8")
+            print(f"[Received] {username}: {message}")
 
         except Exception as e:
             print(f"Error receiving message: {e}")
@@ -40,14 +40,13 @@ def receive_message(sock):
 
 def main():
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-
-    server_address = input("Type in the server's address to connect to: ")
+    server_address = input("Type in the server's address: ")
     server_port = 9001
     
-    address = ""
-    port = 0
+    client_address = ""
+    client_port = 0
 
-    sock.bind((address, port))
+    sock.bind((client_address, client_port))
 
     try:
         username = input("Type in your user name: ")
@@ -55,6 +54,7 @@ def main():
         sock.sendto(message, (server_address, server_port))
         print(f"{username} has connected to the server.")
 
+        # thread を使用してメッセージの送受信を並列処理
         send_thread = threading.Thread(target=send_message, args=(sock, server_address, server_port, username))
         receive_thread = threading.Thread(target=receive_message, args=(sock,))
         send_thread.start()
@@ -62,10 +62,8 @@ def main():
         send_thread.join()
         receive_thread.join()
 
-    except KeyboardInterrupt:
-        print("\nExiting...")
-
     except Exception as e:
+        print(f"An error occurred: {e}")
         print("\nExiting...")
         sock.close()
         exit(1)
